@@ -12,15 +12,18 @@ import time
 import datetime
 import requests
 from typing import Optional, List, Dict, Any, Set
+from dotenv import load_dotenv
 
-# ===== 設定 =====
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
+# ===== 設定（環境変数から取得） =====
 CATS_LOGIN_URL = "https://admin.deneb.tokyo/front/login/confirm"
 CATS_SEARCH_URL = "https://admin.deneb.tokyo/admin/actionlog/list/search"
-CATS_LOGIN_ID = "milkywei001"
-CATS_PASSWORD = "#h&fEKO8J_-J"
+CATS_LOGIN_ID = os.environ["CATS_LOGIN_ID"]
+CATS_PASSWORD = os.environ["CATS_PASSWORD"]
 
-CHATWORK_API_TOKEN = "ab601292fd699a05b586481604402198"
-CHATWORK_ROOM_ID = "424761668"
+CHATWORK_API_TOKEN = os.environ["CHATWORK_API_TOKEN"]
+CHATWORK_ROOM_ID = os.environ.get("CATS_CHATWORK_ROOM_ID", os.environ.get("CHATWORK_ROOM_ID", ""))
 CHATWORK_API_URL = f"https://api.chatwork.com/v2/rooms/{CHATWORK_ROOM_ID}/messages"
 
 # チェック間隔（秒）
