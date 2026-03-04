@@ -77,17 +77,15 @@ def send_chatwork_message(message: str) -> bool:
 
 
 def format_cv_message(records: List[Dict[str, Any]]) -> str:
-    lines = [f"[info][title]【CATs】新規CV通知 ({len(records)}件)[/title]"]
+    messages = []
     for r in records:
-        lines.append(
-            f"■ {r.get('actionDate', '-')}\n"
-            f"  媒体: {r.get('partnerName', '-')}\n"
-            f"  広告主: {r.get('companyName', '-')}\n"
-            f"  広告名: {r.get('contentName', '-')}\n"
-            f"  成果地点: {r.get('actionPointId', '-')}\n"
+        messages.append(
+            f"[info][title]新規CV通知【CATs】[/title]"
+            f"\\ CVがつきました‼️🎉 /　{r.get('actionDate', '-')}\n"
+            f"・ 媒体: {r.get('partnerName', '-')}\n"
+            f"・ 広告主: {r.get('companyName', '-')}[/info]"
         )
-    lines.append("[/info]")
-    return "\n".join(lines)
+    return "\n".join(messages)
 
 
 def load_state() -> Dict[str, Any]:
