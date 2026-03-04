@@ -2,8 +2,12 @@ name: CATs CV Notify
 
 on:
   schedule:
-    - cron: '* * * * *'  # 1分ごとに実行
+    - cron: '*/5 * * * *'  # 5分ごとに実行
   workflow_dispatch: {}     # 手動実行も可能
+
+concurrency:
+  group: cats-cv-notify
+  cancel-in-progress: true
 
 jobs:
   notify:

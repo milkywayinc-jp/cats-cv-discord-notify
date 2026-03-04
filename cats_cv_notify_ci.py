@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 CATs CV通知 + CV検索応答 → Discord（GitHub Actions用）
-1分ごとに起動し、50秒の間20秒おきにチェックする
+5分ごとに起動し、270秒の間20秒おきにチェックする
 """
 
 import os
@@ -23,7 +23,7 @@ DISCORD_CHANNEL_ID = os.environ["DISCORD_CHANNEL_ID"]
 DISCORD_API_BASE = "https://discord.com/api/v10"
 
 CHECK_INTERVAL = 20   # 20秒
-RUN_DURATION = 50     # 50秒（1分のcronに収まるように）
+RUN_DURATION = 270    # 270秒（5分のcronに収まるように）
 
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cats_last_check.json")
 
