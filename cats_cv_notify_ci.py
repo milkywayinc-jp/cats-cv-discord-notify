@@ -22,8 +22,8 @@ CHATWORK_API_TOKEN = os.environ["CHATWORK_API_TOKEN"]
 CHATWORK_ROOM_ID = os.environ["CHATWORK_ROOM_ID"]
 CHATWORK_API_URL = f"https://api.chatwork.com/v2/rooms/{CHATWORK_ROOM_ID}/messages"
 
-CHECK_INTERVAL = 25   # 25秒
-RUN_DURATION = 110    # 1分50秒（2分のcronに収まるように）
+CHECK_INTERVAL = 20   # 20秒
+RUN_DURATION = 50     # 50秒（1分のcronに収まるように）
 
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cats_last_check.json")
 
