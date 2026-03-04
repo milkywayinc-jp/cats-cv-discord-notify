@@ -164,7 +164,7 @@ def parse_search_query(body: str) -> Optional[Dict[str, str]]:
 
 
 def format_search_result(records: List[Dict[str, Any]], query: Dict[str, str]) -> List[Dict[str, Any]]:
-    """CV検索結果をDiscord Embed形式にフォーマット"""
+    """CV検索結果をDiscord Embed形式にフォーマット（フィールド表形式）"""
     q = normalize_text(query["query"])
     if query["type"] == "media":
         filtered = [r for r in records if q in normalize_text(r.get("partnerName", ""))]
@@ -180,30 +180,54 @@ def format_search_result(records: List[Dict[str, Any]], query: Dict[str, str]) -
             "color": 0x0099FF,
         }]
 
-    lines = [f"この期間のCVは【{len(filtered)}】件です。\n---"]
-    for i, r in enumerate(filtered):
-        num = CIRCLED_NUMS[i] if i < len(CIRCLED_NUMS) else f"({i+1})"
-        click = r.get("clickDate", "-")
-        action = r.get("actionDate", "-")
-        flag = ""
-        try:
-            dt_click = datetime.datetime.strptime(click, "%Y-%m-%d %H:%M:%S")
-            dt_action = datetime.datetime.strptime(action, "%Y-%m-%d %H:%M:%S")
-            if (dt_action - dt_click).total_seconds() >= 12 * 3600:
-                flag = "❌"
-        except (ValueError, TypeError):
-            pass
-        if query["type"] == "project":
-            media = r.get("partnerName", "-")
-            lines.append(f"{num}【媒体】{media}\n　【クリック】{click}【成果】{action}{flag}")
-        else:
-            lines.append(f"{num}【クリック】{click}【成果】{action}{flag}")
+    # 8件ずつEmbed分割（フィールド上限25 / 3列 = 8行）
+    embeds = []
+    for chunk_start in range(0, len(filtered), 8):
+        chunk = filtered[chunk_start:chunk_start + 8]
+        no_lines = []
+        click_lines = []
+        action_lines = []
+        for i, r in enumerate(chunk):
+            idx = chunk_start + i
+            num = CIRCLED_NUMS[idx] if idx < len(CIRCLED_NUMS) else f"({idx+1})"
+            click = r.get("clickDate", "-")
+            action = r.get("actionDate", "-")
+            flag = ""
+            try:
+                dt_click = datetime.datetime.strptime(click, "%Y-%m-%d %H:%M:%S")
+                dt_action = datetime.datetime.strptime(action, "%Y-%m-%d %H:%M:%S")
+                if (dt_action - dt_click).total_seconds() >= 12 * 3600:
+                    flag = " ❌"
+            except (ValueError, TypeError):
+                pass
+            if query["type"] == "project":
+                media = r.get("partnerName", "-")
+                if len(media) > 25:
+                    media = media[:24] + "…"
+                no_lines.append(f"{num} {media}")
+            else:
+                no_lines.append(num)
+            click_lines.append(click)
+            action_lines.append(f"{action}{flag}")
 
-    return [{
-        "title": "CV検索結果",
-        "description": "\n".join(lines),
-        "color": 0x0099FF,
-    }]
+        fields = []
+        if query["type"] == "project":
+            fields.append({"name": "No / 媒体", "value": "\n".join(no_lines), "inline": True})
+        else:
+            fields.append({"name": "No", "value": "\n".join(no_lines), "inline": True})
+        fields.append({"name": "クリック", "value": "\n".join(click_lines), "inline": True})
+        fields.append({"name": "成果", "value": "\n".join(action_lines), "inline": True})
+
+        embed = {
+            "color": 0x0099FF,
+            "fields": fields,
+        }  # type: Dict[str, Any]
+        if chunk_start == 0:
+            embed["title"] = "CV検索結果"
+            embed["description"] = f"この期間のCVは【{len(filtered)}】件です。"
+        embeds.append(embed)
+
+    return embeds
 
 
 def check_search_queries(session: requests.Session, responded_ids: Set[str]) -> Set[str]:
