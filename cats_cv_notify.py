@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-CATs CV通知 + CV検索応答 → Chatwork
-成果ログを定期チェックし、新しいCVをChatworkに通知する
-Chatworkの検索リクエストにも応答する
+CATs CV通知 + CV検索応答 → Discord
+成果ログを定期チェックし、新しいCVをDiscordに通知する
+Discordの検索リクエストにも応答する
 """
 
 import os
@@ -22,9 +22,9 @@ CATS_SEARCH_URL = "https://admin.deneb.tokyo/admin/actionlog/list/search"
 CATS_LOGIN_ID = os.environ["CATS_LOGIN_ID"]
 CATS_PASSWORD = os.environ["CATS_PASSWORD"]
 
-CHATWORK_API_TOKEN = os.environ["CHATWORK_API_TOKEN"]
-CHATWORK_ROOM_ID = os.environ.get("CATS_CHATWORK_ROOM_ID", os.environ.get("CHATWORK_ROOM_ID", ""))
-CHATWORK_API_URL = f"https://api.chatwork.com/v2/rooms/{CHATWORK_ROOM_ID}/messages"
+DISCORD_BOT_TOKEN = os.environ["DISCORD_BOT_TOKEN"]
+DISCORD_CHANNEL_ID = os.environ["DISCORD_CHANNEL_ID"]
+DISCORD_API_BASE = "https://discord.com/api/v10"
 
 # チェック間隔（秒）
 CHECK_INTERVAL = 30  # 30秒（即時通知）
@@ -79,24 +79,31 @@ def fetch_cv_logs(session: requests.Session, date_str: Optional[str] = None) -> 
         return []
 
 
-def send_chatwork_message(message: str) -> bool:
-    """Chatworkにメッセージを送信"""
-    resp = requests.post(
-        CHATWORK_API_URL,
-        headers={"X-ChatWorkToken": CHATWORK_API_TOKEN},
-        data={"body": message, "self_unread": "1"},
-    )
+def send_discord_message(content: Optional[str] = None, embeds: Optional[List[Dict[str, Any]]] = None) -> bool:
+    """Discordにメッセージを送信"""
+    url = f"{DISCORD_API_BASE}/channels/{DISCORD_CHANNEL_ID}/messages"
+    headers = {
+        "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {}  # type: Dict[str, Any]
+    if content:
+        payload["content"] = content
+    if embeds:
+        payload["embeds"] = embeds
+
+    resp = requests.post(url, headers=headers, json=payload)
     if resp.status_code in (200, 201):
-        print(f"[OK] Chatwork送信成功")
+        print("[OK] Discord送信成功")
         return True
     else:
-        print(f"[ERROR] Chatwork送信失敗: {resp.status_code} {resp.text}")
+        print(f"[ERROR] Discord送信失敗: {resp.status_code} {resp.text}")
         return False
 
 
-def format_cv_message(records: List[Dict[str, Any]]) -> str:
-    """CV情報をChatworkメッセージにフォーマット"""
-    messages = []
+def format_cv_message(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """CV情報をDiscord Embed形式にフォーマット"""
+    embeds = []
     for r in records:
         action = r.get('actionDate', '-')
         click = r.get('clickDate', '')
@@ -108,30 +115,28 @@ def format_cv_message(records: List[Dict[str, Any]]) -> str:
                 flag = "(❌)"
         except (ValueError, TypeError):
             pass
-        messages.append(
-            f"[info][title]新規CV通知【CATs】[/title]"
-            f"\\ CVがつきました‼️🎉 /　{action}{flag}\n"
-            f"・ 媒体: {r.get('partnerName', '-')}\n"
-            f"・ 広告主: {r.get('companyName', '-')}[/info]"
-        )
-    return "\n".join(messages)
+        embeds.append({
+            "title": "新規CV通知【CATs】",
+            "description": (
+                f"\\ CVがつきました‼️🎉 /　{action}{flag}\n"
+                f"・ 媒体: {r.get('partnerName', '-')}\n"
+                f"・ 広告主: {r.get('companyName', '-')}"
+            ),
+            "color": 0x00FF00,
+        })
+    return embeds
 
 
 # ===== CV検索応答 =====
 
-def fetch_chatwork_messages() -> List[Dict[str, Any]]:
-    """Chatworkの最新メッセージを取得"""
-    resp = requests.get(
-        CHATWORK_API_URL,
-        headers={"X-ChatWorkToken": CHATWORK_API_TOKEN},
-        params={"force": "1"},
-        timeout=10,
-    )
+def fetch_discord_messages() -> List[Dict[str, Any]]:
+    """Discordの最新メッセージを取得"""
+    url = f"{DISCORD_API_BASE}/channels/{DISCORD_CHANNEL_ID}/messages"
+    headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
+    resp = requests.get(url, headers=headers, params={"limit": "50"}, timeout=10)
     if resp.status_code == 200:
         return resp.json()
-    if resp.status_code == 204:
-        return []
-    print(f"[ERROR] Chatworkメッセージ取得失敗: {resp.status_code}")
+    print(f"[ERROR] Discordメッセージ取得失敗: {resp.status_code}")
     return []
 
 
@@ -165,9 +170,8 @@ def parse_search_query(body: str) -> Optional[Dict[str, str]]:
     return None
 
 
-def format_search_result(records: List[Dict[str, Any]], query: Dict[str, str]) -> str:
-    """CV検索結果をフォーマット"""
-    # フィルタ（正規化して比較、partnerName と companyName 両方を検索）
+def format_search_result(records: List[Dict[str, Any]], query: Dict[str, str]) -> List[Dict[str, Any]]:
+    """CV検索結果をDiscord Embed形式にフォーマット"""
     q = normalize_text(query["query"])
     if query["type"] == "media":
         filtered = [r for r in records if q in normalize_text(r.get("partnerName", ""))]
@@ -177,14 +181,17 @@ def format_search_result(records: List[Dict[str, Any]], query: Dict[str, str]) -
                     or q in normalize_text(r.get("partnerName", ""))]
 
     if not filtered:
-        return f"[info][title]CV検索結果[/title]「{query['query']}」のCVは【0】件です。[/info]"
+        return [{
+            "title": "CV検索結果",
+            "description": f"「{query['query']}」のCVは【0】件です。",
+            "color": 0x0099FF,
+        }]
 
-    lines = [f"[info][title]CV検索結果[/title]この期間のCVは【{len(filtered)}】件です。\n---"]
+    lines = [f"この期間のCVは【{len(filtered)}】件です。\n---"]
     for i, r in enumerate(filtered):
         num = CIRCLED_NUMS[i] if i < len(CIRCLED_NUMS) else f"({i+1})"
         click = r.get("clickDate", "-")
         action = r.get("actionDate", "-")
-        # クリック→成果が12時間以上なら❌
         flag = ""
         try:
             dt_click = datetime.datetime.strptime(click, "%Y-%m-%d %H:%M:%S")
@@ -198,30 +205,34 @@ def format_search_result(records: List[Dict[str, Any]], query: Dict[str, str]) -
             lines.append(f"{num}【媒体】{media}\n　【クリック】{click}【成果】{action}{flag}")
         else:
             lines.append(f"{num}【クリック】{click}【成果】{action}{flag}")
-    lines.append("[/info]")
-    return "\n".join(lines)
+
+    return [{
+        "title": "CV検索結果",
+        "description": "\n".join(lines),
+        "color": 0x0099FF,
+    }]
 
 
 def check_search_queries(session: requests.Session, responded_ids: Set[str]) -> Set[str]:
-    """Chatworkの検索リクエストに応答"""
-    messages = fetch_chatwork_messages()
+    """Discordの検索リクエストに応答"""
+    messages = fetch_discord_messages()
     if not messages:
         return responded_ids
 
     for msg in messages:
-        mid = str(msg.get("message_id", ""))
+        mid = str(msg.get("id", ""))
         if mid in responded_ids:
             continue
 
-        body = msg.get("body", "")
+        body = msg.get("content", "")
         query = parse_search_query(body)
         if query is None:
             continue
 
         print(f"[SEARCH] 検索リクエスト検出: {query['type']}={query['query']}")
         records = fetch_cv_logs(session, query["date_str"])
-        result = format_search_result(records, query)
-        send_chatwork_message(result)
+        result_embeds = format_search_result(records, query)
+        send_discord_message(embeds=result_embeds)
         responded_ids.add(mid)
 
     return responded_ids
@@ -272,8 +283,10 @@ def check_and_notify(session: requests.Session, seen_ids: Set[str]) -> Set[str]:
 
     if new_records:
         print(f"[{now}] 取得: {len(records)}件 → 新規CV {len(new_records)}件!")
-        message = format_cv_message(new_records)
-        send_chatwork_message(message)
+        embeds = format_cv_message(new_records)
+        # Discord embeds上限は10件/リクエスト
+        for i in range(0, len(embeds), 10):
+            send_discord_message(embeds=embeds[i:i+10])
     else:
         print(f"[{now}] 取得: {len(records)}件 → 新規なし")
 
@@ -283,7 +296,7 @@ def check_and_notify(session: requests.Session, seen_ids: Set[str]) -> Set[str]:
 def test_single():
     """テスト: 1回だけ実行して結果確認"""
     print("=" * 50)
-    print("CATs CV通知テスト")
+    print("CATs CV通知テスト（Discord）")
     print("=" * 50)
 
     session = requests.Session()
@@ -307,17 +320,17 @@ def test_single():
             print(f"  媒体名: {r.get('partnerName', '-')}")
             print(f"  広告主: {r.get('companyName', '-')}")
 
-        print("\n[4] Chatwork送信テスト（最新1件のみ）...")
-        test_msg = format_cv_message(records[:1])
-        print(f"  メッセージプレビュー:\n{test_msg}")
-        send_chatwork_message(test_msg)
+        print("\n[4] Discord送信テスト（最新1件のみ）...")
+        test_embeds = format_cv_message(records[:1])
+        print(f"  Embedプレビュー: {json.dumps(test_embeds, ensure_ascii=False, indent=2)}")
+        send_discord_message(embeds=test_embeds)
     else:
         print("  本日のCVデータなし")
 
 
 def run_loop():
     """ループ実行（セッション使い回し）"""
-    print(f"CATs CV即時通知 + 検索応答を開始（{CHECK_INTERVAL}秒間隔）")
+    print(f"CATs CV即時通知 + 検索応答を開始（{CHECK_INTERVAL}秒間隔）→ Discord")
     print("Ctrl+C で停止\n")
 
     session = requests.Session()
@@ -342,10 +355,10 @@ def run_loop():
 
     # 初回は既存の検索リクエストをスキップ
     if not responded_ids:
-        messages = fetch_chatwork_messages()
+        messages = fetch_discord_messages()
         for msg in messages:
-            mid = str(msg.get("message_id", ""))
-            body = msg.get("body", "")
+            mid = str(msg.get("id", ""))
+            body = msg.get("content", "")
             if parse_search_query(body) is not None:
                 responded_ids.add(mid)
         if responded_ids:

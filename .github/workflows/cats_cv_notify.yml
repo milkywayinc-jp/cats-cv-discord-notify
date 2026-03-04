@@ -30,6 +30,6 @@ jobs:
         env:
           CATS_LOGIN_ID: ${{ secrets.CATS_LOGIN_ID }}
           CATS_PASSWORD: ${{ secrets.CATS_PASSWORD }}
-          CHATWORK_API_TOKEN: ${{ secrets.CHATWORK_API_TOKEN }}
-          CHATWORK_ROOM_ID: ${{ secrets.CHATWORK_ROOM_ID }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
         run: python cats_cv_notify_ci.py
