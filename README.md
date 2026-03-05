@@ -1,4 +1,4 @@
-# workspace
+# cats-cv-discord-notify
 
 CATs CV通知 + CV検索Bot — Discord連携
 
